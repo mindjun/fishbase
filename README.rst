@@ -1,8 +1,3 @@
-.. fish_base documentation master file, created by
-   sphinx-quickstart on Wed Apr 18 15:20:36 2018.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 
 .. image:: https://travis-ci.org/chinapnr/fishbase.svg?branch=master
     :target: https://travis-ci.org/chinapnr/fishbase
@@ -10,6 +5,10 @@
     :target: https://coveralls.io/github/chinapnr/fishbase?branch=master
 .. image:: https://readthedocs.org/projects/fishbase/badge/?version=latest
     :target: https://fishbase.readthedocs.io/en/latest/?badge=latest
+.. image:: https://ci.appveyor.com/api/projects/status/ecskod12wy8fvkxu?svg=true
+    :target: https://ci.appveyor.com/project/itaa/fishbase
+
+
 
 简介
 ====
@@ -48,8 +47,6 @@ Install and update using `pip`_:
 
 -  fish_project project 目录结构生成函数包
 
--  fish_random 生成随机值函数包
-
 使用示例
 ========
 
@@ -75,30 +72,10 @@ Install and update using `pip`_:
     print(is_valid_id_number("320124198701010012"))
 
 
-.. toctree::
-   :maxdepth: 1
+更多
+=====
 
-   change_log
-
-
-API 函数列表
------------------------------
-
-可以到以下单元中查找具体的函数列表和使用说明。
-
-.. toctree::
-   :maxdepth: 2
-
-   fish_common
-   fish_csv
-   fish_data
-   fish_date
-   fish_file
-   fish_logger
-   fish_project
-   fish_system
-   fish_random
-
+详细帮助文档：http://fishbase.readthedocs.io/
 
 
 

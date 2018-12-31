@@ -1,19 +1,29 @@
 # from distutils.core import setup
 from setuptools import setup
-from fishbase import __version__
+import io
+import re
+
+with io.open('README.rst', 'rt', encoding='utf8') as f:
+    readme = f.read()
+
+with io.open('fishbase/__init__.py', 'rt', encoding='utf8') as f:
+    version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
 
 setup(
     name='fishbase',
-    version=__version__,
-    install_requires=['python-dateutil'],
+    version=version,
+    install_requires=['python-dateutil',
+                      'pyyaml'],
 
     url='https://github.com/chinapnr/fishbase',
     license='MIT',
     author='David Yi',
     author_email='wingfish@gmail.com',
     description='some useful functions for python',
-
+    long_description=readme,
     packages=['fishbase'],
+    package_data={'db': ['fishbase/db/*']},
+    include_package_data=True,
 
     # packages=['fishbase', 'fishbase.naive_bayes'],
     # package_data={'': ['stopwords.txt']},
@@ -24,7 +34,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
@@ -35,9 +45,10 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ]
 
 )

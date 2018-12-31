@@ -21,5 +21,9 @@ from .fish_csv import *
 from .fish_date import *
 from .fish_file import *
 from .fish_logger import *
+from .fish_system import *
+from .fish_project import *
+from .fish_data import *
 
-__version__ = '1.0.12'  # type: str
+__version__ = '1.1.5'  # type: str
+

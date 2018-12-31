@@ -1,3 +1,4 @@
 include LICENSE.txt
-include dev_doc/*
 recursive-include demo *
+prune dev_doc
+recursive-include fishbase/db *
