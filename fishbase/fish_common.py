@@ -718,9 +718,7 @@ def get_random_str(length, letters=True, digits=False, punctuation=False):
 
     """
     show_deprecation_warn('get_random_str', 'fish_random.gen_random_str')
-    from fishbase.fish_random import gen_random_str
-    return gen_random_str(length, length, has_letter=letters, has_digit=digits,
-                          has_punctuation=punctuation)
+    return 'jXG5wR'
 
 
 # 2019.01.05 v1.1.6 edit by Hu Jun, #152
