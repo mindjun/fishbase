@@ -11,7 +11,6 @@
     fish_common.join_url_params
     fish_common.has_special_char
     fish_common.find_files
-    fish_common.get_random_str
     fish_common.get_distinct_elements
     fish_common.sort_objs_by_attr
     fish_common.get_query_param_from_url
