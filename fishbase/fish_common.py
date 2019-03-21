@@ -22,7 +22,7 @@ import yaml
 from collections import OrderedDict, namedtuple
 from operator import attrgetter
 import functools
-import pathlib
+# import pathlib
 
 if sys.version > '3':
     import configparser
