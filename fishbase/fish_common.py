@@ -10,20 +10,19 @@
 # 2016.4.7 v1.0.6, v1.0.7  add get_long_filename_with_sub_dir()
 # 2016.10.4 v1.0.9 add #19001 check_sub_path_create()
 # 2017.1.8 v1.0.9 #19003, remove file related functions to fish_file.py
+# 2019.1.18 v1.1.6 #200, remove function get_random_str to fish_random.py
 import sys
 import uuid
 import copy
 import re
-import hashlib
-import hmac
 import os
-import base64
-import string
-import random
+import warnings
+
 import yaml
 from collections import OrderedDict, namedtuple
 from operator import attrgetter
 import functools
+import pathlib
 
 if sys.version > '3':
     import configparser
@@ -32,7 +31,6 @@ else:
     import ConfigParser as configparser
     from urllib import urlencode
     from urlparse import parse_qs, urlsplit
-    
 
 # uuid kind const
 udTime = 10001
@@ -46,6 +44,17 @@ odDES = 10012
 charChinese = 10021
 charNum = 10022
 
+# common data type
+commonDataType = tuple([int, float, bool, complex, str, set, list, tuple, dict])
+
+
+# v1.1.6 edit by Hu Jun
+def show_deprecation_warn(old_fun, suggest_fun):
+    warnings.simplefilter('always')
+    warnings.warn('{} is deprecated, and in 2.x it will stop working. '
+                  'Use {} instead.'.format(old_fun, suggest_fun),
+                  DeprecationWarning, stacklevel=2)
+
 
 # 读入配置文件，返回根据配置文件内容生成的字典类型变量，减少文件读取次数
 # 2017.2.23 #19008 create by David Yi
@@ -54,6 +63,7 @@ charNum = 10022
 # 2018.5.14 v1.0.11 #19028 逻辑修改，更加严密
 # v1.0.15 edit by Hu Jun, #83
 # v1.0.16 edit by Hu Jun, #94
+# v1.0.17 edit by Hu Jun, #212
 def conf_as_dict(conf_filename, encoding=None):
     """
     读入 ini 配置文件，返回根据配置文件内容生成的字典类型变量；
@@ -109,7 +119,7 @@ def conf_as_dict(conf_filename, encoding=None):
     flag = False
 
     # 检查文件是否存在
-    if not(os.path.isfile(conf_filename)):
+    if not pathlib.Path(conf_filename).is_file():
         return flag,
 
     cf = configparser.ConfigParser()
@@ -183,12 +193,55 @@ class SingleTon(object):
         return ob
 
 
-# 对象序列化
 # 2015.6.14  edit by david.yi
+# 2019.03.19 v1.1.7 edit by Hu Jun, edit from Jia Chunying，#215
 def serialize_instance(obj):
-    d = {'__classname__': type(obj).__name__}
-    d.update(vars(obj))
-    return d
+    """
+    对象序列化
+
+    :param:
+        * obj: (object) 对象实例
+
+    :return:
+        * obj_dict: (dict) 对象序列化字典
+
+    举例如下::
+
+        print('--- serialize_instance demo ---')
+        # 定义两个对象
+        class Obj(object):
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+
+        class ObjB(object):
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        # 对象序列化
+        b = ObjB('string', [item for item in range(10)])
+        obj_ = Obj(1, b)
+        print(serialize_instance(obj_))
+        print('---')
+
+    执行结果::
+
+        --- serialize_instance demo ---
+        {'__classname__': 'Obj', 'a': 1,
+        'b': {'__classname__': 'ObjB', 'x': 'string', 'y': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}}
+        ---
+
+    """
+    obj_dict = {'__classname__': type(obj).__name__}
+    obj_dict.update(obj.__dict__)
+    for key, value in obj_dict.items():
+        if not isinstance(value, commonDataType):
+            sub_dict = serialize_instance(value)
+            obj_dict.update({key: sub_dict})
+        else:
+            continue
+    return obj_dict
 
 
 # 2018.5.26 v1.0.13 edit by David Yi，#19038
@@ -251,11 +304,18 @@ def get_uuid(kind):
 get_time_uuid = functools.partial(get_uuid, udTime)
 
 
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def if_any_elements_is_space(dic):
+    show_deprecation_warn('if_any_elements_is_space', 'has_space_element')
+    return has_space_element(dic)
+
+
 # 2017.2.22 edit by David.Yi, #19007
 # 2018.6.29 v1.0.14 edit by Hu Jun，#62
-def if_any_elements_is_space(source):
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def has_space_element(source):
     """
-    判断对象中的元素，如果存在 None 或空字符串或空格字符串，则返回 True, 否则返回 False, 支持字典、列表和元组
+    判断对象中的元素，如果存在 None 或空字符串，则返回 True, 否则返回 False, 支持字典、列表和元组
 
     :param:
         * source: (list, set, dict) 需要检查的对象
@@ -265,18 +325,18 @@ def if_any_elements_is_space(source):
 
     举例如下::
 
-        print('--- if_any_elements_is_space demo---')
-        print(if_any_elements_is_space([1, 2, 'test_str']))
-        print(if_any_elements_is_space([0, 2]))
-        print(if_any_elements_is_space([1, 2, None]))
-        print(if_any_elements_is_space((1, [1, 2], 3, '')))
-        print(if_any_elements_is_space({'a': 1, 'b': 0}))
-        print(if_any_elements_is_space({'a': 1, 'b': []}))
+        print('--- has_space_element demo---')
+        print(has_space_element([1, 2, 'test_str']))
+        print(has_space_element([0, 2]))
+        print(has_space_element([1, 2, None]))
+        print(has_space_element((1, [1, 2], 3, '')))
+        print(has_space_element({'a': 1, 'b': 0}))
+        print(has_space_element({'a': 1, 'b': []}))
         print('---')
 
     执行结果::
 
-        --- if_any_elements_is_space demo---
+        --- has_space_element demo---
         False
         False
         True
@@ -292,13 +352,11 @@ def if_any_elements_is_space(source):
         check_list = list(source)
     else:
         raise TypeError('source except list, tuple or dict, but got {}'.format(type(source)))
-    
     for i in check_list:
         if i is 0:
             continue
         if not (i and str(i).strip()):
             return True
-    
     return False
 
 
@@ -309,8 +367,7 @@ def if_any_elements_is_space(source):
 def if_any_elements_is_special(source):
 
     if not re.match('^[a-zA-Z0-9_,-.|]+$', "".join(source)):
-            return False
-
+        return False
     return True
 
 
@@ -328,11 +385,17 @@ def if_any_elements_is_number(source):
     return True
 
 
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def if_any_elements_is_letter(source):
+    show_deprecation_warn('if_any_elements_is_letter', 'fish_isalpha')
+    return fish_isalpha(source)
+
+
 # 2017.3.30 create by Leo #11004
 # 功能：监测list或者元素是否只包含英文
 # 输入：source 是参数列表或元组
 # 输出：True：只包含英文；False：不只包含英文
-def if_any_elements_is_letter(source):
+def fish_isalpha(source):
 
     for i in source:
 
@@ -352,105 +415,37 @@ class FishCache:
         # 生成 key，用于 dict
         temp_key = section + '_' + key
 
-        if not (temp_key in self.__cache):
+        if temp_key not in self.__cache:
             self.__cache[temp_key] = cf[section][key]
-
         return self.__cache[temp_key]
 
 
-# 2018.5.8 edit by David Yi, edit from Jia Chunying，#19026
-# 2018.6.12 edit by Hu Jun, edit from Jia Chunying，#37
-# 2018.10.28 edit by Hu Jun #99
+# 2019.01.06 edit by Hu Jun, #152
+# 2019.01.21 edit by Hu Jun, #200
 class GetMD5(object):
-    """
-    计算普通字符串和一般的文件，对于大文件采取逐步读入的方式，也可以快速计算；基于 Python 的 hashlib.md5() 进行封装和扩展；
-
-    举例如下::
-
-        print('--- md5 demo ---')
-        print('string md5:', GetMD5.string('hello world!'))
-        print('file md5:', GetMD5.file(get_abs_filename_with_sub_path('test_conf', 'test_conf.ini')[1]))
-        print('big file md5:', GetMD5.big_file(get_abs_filename_with_sub_path('test_conf', 'test_conf.ini')[1]))
-        print('string hmac_md5:', GetMD5.hmac_md5('hello world!', 'salt'))
-        print('---')
-
-    执行结果::
-        
-        --- md5 demo ---
-        string md5: fc3ff98e8c6a0d3087d515c0473f8677
-        file md5: fb7528c9778b2377e30b0f7e4c26fef0
-        big file md5: fb7528c9778b2377e30b0f7e4c26fef0
-        string hmac_md5: 191f82804523bfdafe0188bbbddd6587
-        ---
-
-    """
-
     @staticmethod
     def string(s, salt=None):
-        """
-        获取一个字符串的 MD5 值
-
-        :param:
-            * s: (string) 需要进行 hash 的字符串
-            * salt: (string) 随机字符串，默认为 None
-        :return:
-            * result: (string) 32 位小写 MD5 值
-        """
-        m = hashlib.md5()
-        s = s.encode('utf-8') + salt.encode('utf-8') if salt is not None else s.encode('utf-8')
-        m.update(s)
-        result = m.hexdigest()
-        return result
+        from fishbase.fish_crypt import FishMD5
+        show_deprecation_warn('GetMD5.sting', 'fish_crypt.FishMD5.string')
+        return FishMD5.string(s, salt=salt)
 
     @staticmethod
     def file(filename):
-        """
-        获取一个文件的 MD5 值
-
-        :param:
-            * filename: (string) 需要进行 hash 的文件名
-        :return:
-            * result: (string) 32位小写 MD5 值
-        """
-        m = hashlib.md5()
-        with open(filename, 'rb') as f:
-            m.update(f.read())
-            result = m.hexdigest()
-            return result
+        from fishbase.fish_crypt import FishMD5
+        show_deprecation_warn('GetMD5.file', 'fish_crypt.FishMD5.file')
+        return FishMD5.file(filename)
 
     @staticmethod
     def big_file(filename):
-        """
-        获取一个大文件的 MD5 值
-
-        :param:
-            * filename: (string) 需要进行 hash 的大文件路径
-        :return:
-            * result: (string) 32位小写 MD5 值
-        """
-
-        md5 = hashlib.md5()
-        with open(filename, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''):
-                md5.update(chunk)
-
-        result = md5.hexdigest()
-        return result
+        from fishbase.fish_crypt import FishMD5
+        show_deprecation_warn('GetMD5.big_file', 'fish_crypt.FishMD5.big_file')
+        return FishMD5.big_file(filename)
 
     @staticmethod
     def hmac_md5(s, salt):
-        """
-        获取一个字符串的 使用 salt 加密的 hmac MD5 值
-
-        :param:
-            * s: (string) 需要进行 hash 的字符串
-            * salt: (string) 随机字符串
-        :return:
-            * result: (string) 32位小写 MD5 值
-        """
-        hmac_md5 = hmac.new(salt.encode('utf-8'), s.encode('utf-8'),
-                            digestmod=hashlib.md5).hexdigest()
-        return hmac_md5
+        from fishbase.fish_crypt import FishMD5
+        show_deprecation_warn('GetMD5.hmac_md5', 'fish_crypt.FishMD5.hmac_md5')
+        return FishMD5.hmac_md5(s, salt)
 
 
 # 2018.5.15 v1.0.11 original by Lu Jie, edit by David Yi, #19029
@@ -490,10 +485,17 @@ def if_json_contain(left_json, right_json, op='strict'):
         return True
 
 
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def splice_url_params(dic):
+    show_deprecation_warn('splice_url_params', 'join_url_params')
+    return join_url_params(dic)
+
+
 # 2018.3.8 edit by Xiang qinqin
 # 2018.5.15 edit by David Yi, #19030
 # v1.0.15 edit by Hu Jun, #67
-def splice_url_params(dic):
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def join_url_params(dic):
     """
     根据传入的键值对，拼接 url 后面 ? 的参数，比如 ?key1=value1&key2=value2
 
@@ -569,9 +571,16 @@ def sorted_list_from_dict(p_dict, order=odASC):
         return o_list[::-1]
 
 
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def is_contain_special_char(p_str, check_style=charChinese):
+    show_deprecation_warn('is_contain_special_char', 'has_special_char')
+    return has_special_char(p_str, check_style=check_style)
+
+
 # v1.0.13 edit by David Yi, edit by Hu Jun，#36
 # v1.0.14 edit by Hu Jun #38
-def is_contain_special_char(p_str, check_style=charChinese):
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def has_special_char(p_str, check_style=charChinese):
     """
     检查字符串是否含有指定类型字符
     
@@ -585,27 +594,27 @@ def is_contain_special_char(p_str, check_style=charChinese):
 
     举例如下::
         
-        print('--- is_contain_special_char demo ---')
+        print('--- has_special_char demo ---')
         p_str1 = 'meiyouzhongwen'
-        non_chinese_result = check_str(p_str1, check_style=charChinese)
+        non_chinese_result = has_special_char(p_str1, check_style=charChinese)
         print(non_chinese_result)
         
         p_str2 = u'有zhongwen'
-        chinese_result = check_str(p_str2, check_style=charChinese)
+        chinese_result = has_special_char(p_str2, check_style=charChinese)
         print(chinese_result)
         
         p_str3 = 'nonnumberstring'
-        non_number_result = check_str(p_str3, check_style=charNum)
+        non_number_result = has_special_char(p_str3, check_style=charNum)
         print(non_number_result)
         
         p_str4 = 'number123'
-        number_result = check_str(p_str4, check_style=charNum)
+        number_result = has_special_char(p_str4, check_style=charNum)
         print(number_result)
         print('---')
 
     执行结果::
         
-        --- is_contain_special_char demo ---
+        --- has_special_char demo ---
         False
         True
         False
@@ -630,6 +639,7 @@ def is_contain_special_char(p_str, check_style=charChinese):
 
 
 # v1.0.14 edit by Hu Jun, edit from Jia Chunying，#38
+# v1.0.17 edit by Hu Jun, #212
 def find_files(path, exts=None):
     """
     查找路径下的文件，返回指定类型的文件列表
@@ -654,8 +664,8 @@ def find_files(path, exts=None):
     执行结果::
 
         --- find_files demo ---
-        ['/root/fishbase_issue/test.png', '/root/fishbase_issue/head.jpg', '/root/fishbase_issue/py/man.png', '/root/fishbase_issue/py/issue.py']
-        ['/root/fishbase_issue/test.png', '/root/fishbase_issue/py/man.png', '/root/fishbase_issue/py/issue.py']
+        ['/root/fishbase_issue/test.png', '/root/fishbase_issue/head.jpg','/root/fishbase_issue/py/man.png'
+        ['/root/fishbase_issue/test.png', '/root/fishbase_issue/py/man.png']
         ---
 
         """
@@ -665,74 +675,14 @@ def find_files(path, exts=None):
             files_list.append(os.path.join(root, name))
     
     if exts is not None:
-        return [file for file in files_list if os.path.splitext(file)[-1] in exts]
+        return [file for file in files_list if pathlib.Path(file).suffix in exts]
         
     return files_list
 
 
-# v1.0.14 edit by Hu Jun, #59
-class Base64:
-    """
-    计算返回文件和字符串的 base64 编码字符串
-
-    举例如下::
-
-        print('--- Base64 demo ---')
-        print('string base64:', Base64.string('hello world!'))
-        print('file base64:', Base64.file(get_abs_filename_with_sub_path('test_conf', 'test_conf.ini')[1]))
-        print('decode base64:', Base64.decode(b'aGVsbG8gd29ybGQ='))
-        print('---')
-
-    执行结果::
-
-        --- Base64 demo ---
-        string base64: b'aGVsbG8gd29ybGQ='
-        file base64: b'IyEvYmluL2Jhc2gKCmNkIC9yb290L3d3dy9zaW5nbGVfcWEKCm5vaHVwIC9yb290L2FwcC9weXRob24zNjIvYmluL2d1bmljb3JuIC1jIGd1bmljb3JuLmNvbmYgc2luZ2xlX3NlcnZlcjphcHAK'
-        decode base64: b'hello world'
-        ---
-
-    """
-    
-    @staticmethod
-    def string(s):
-        """
-        获取一个字符串的 base64 值
-
-        :param:
-            * s: (string) 需要进行 base64 编码 的字符串
-        :return:
-            * (bytes) base64 编码结果
-        """
-        return base64.b64encode(s.encode('utf-8'))
-    
-    @staticmethod
-    def file(filename):
-        """
-        获取一个文件的 base64 值
-
-        :param:
-            * filename: (string) 需要进行 base64 编码 文件路径
-        :return:
-            * (bytes) base64 编码结果
-        """
-        with open(filename, 'rb') as f:
-            return base64.b64encode(f.read())
-    
-    @staticmethod
-    def decode(s):
-        """
-        获取 base64 解码结果
-
-        :param:
-            * filename: (string) 需要进行 base64 编码 文件路径
-        :return:
-            * (bytes) base64 解码结果
-        """
-        return base64.b64decode(s)
-
-
-# v1.0.14 edit by Hu Jun, #51
+# v1.1.6 edit by Hu Jun, #200
 # v1.1.1 edit by Hu Jun, #115
+# v1.0.14 edit by Hu Jun, #51
 def get_random_str(length, letters=True, digits=False, punctuation=False):
     """
     获得指定长度，不同规则的随机字符串，可以包含数字，字母和标点符号
@@ -767,21 +717,20 @@ def get_random_str(length, letters=True, digits=False, punctuation=False):
         ---
 
     """
-    random_source = ''
-    random_source += string.ascii_letters if letters else ''
-    random_source += string.digits if digits else ''
-    random_source += string.punctuation if punctuation else ''
+    show_deprecation_warn('get_random_str', 'fish_random.gen_random_str')
+    from fishbase.fish_random import gen_random_str
+    return gen_random_str(length, length, has_letter=letters, has_digit=digits,
+                          has_punctuation=punctuation)
 
-    # 避免出现 ValueError: Sample larger than population or is negative
-    if length > len(random_source):
-        random_source *= (length//len(random_source) + 1)
 
-    random_str = ''.join(random.sample(random_source, length))
-    return random_str
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
+def remove_duplicate_elements(items, key=None):
+    show_deprecation_warn('remove_duplicate_elements', 'get_distinct_elements')
+    return get_distinct_elements(items, key=key)
 
 
 # v1.0.15 edit by Hu Jun, #77 #63
-def remove_duplicate_elements(items, key=None):
+def get_distinct_elements(items, key=None):
     """
     去除序列中的重复元素，使得剩下的元素仍然保持顺序不变，对于不可哈希的对象，需要指定 key ，说明去重元素
 
@@ -824,8 +773,14 @@ def remove_duplicate_elements(items, key=None):
             seen.add(val)
 
 
-# v1.0.15 edit by Hu Jun, #64
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
 def sorted_objs_by_attr(objs, key, reverse=False):
+    show_deprecation_warn('sorted_objs_by_attr', 'sort_objs_by_attr')
+    return sort_objs_by_attr(objs, key, reverse=reverse)
+
+
+# v1.0.15 edit by Hu Jun, #64
+def sort_objs_by_attr(objs, key, reverse=False):
     """
     对原生不支持比较操作的对象根据属性排序
 
@@ -884,7 +839,7 @@ def get_query_param_from_url(url):
     举例如下::
 
         print('--- get_query_param_from_url demo---')
-        url = 'http://localhost:8811/mytest?page_number=1&page_size=10&start_time=20180515&end_time=20180712'
+        url = 'http://localhost:8811/mytest?page_number=1&page_size=10'
         query_dict = get_query_param_from_url(url)
         print(query_dict['page_size'])
         print('---')
@@ -902,8 +857,14 @@ def get_query_param_from_url(url):
     return OrderedDict(query_dict)
 
 
-# v1.1.0 edit by Hu Jun, #74
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
 def get_group_list_data(data_list, group_number=1, group_size=10):
+    show_deprecation_warn('get_group_list_data', 'paging')
+    return paging(data_list, group_number=group_number, group_size=group_size)
+
+
+# v1.1.0 edit by Hu Jun, #74
+def paging(data_list, group_number=1, group_size=10):
     """
     获取分组列表数据
 
@@ -917,7 +878,7 @@ def get_group_list_data(data_list, group_number=1, group_size=10):
 
     举例如下::
 
-        print('--- get_group_list_data demo---')
+        print('--- paging demo---')
         all_records = [1, 2, 3, 4, 5]
         print(get_group_list_data(all_records))
         
@@ -928,7 +889,7 @@ def get_group_list_data(data_list, group_number=1, group_size=10):
 
     执行结果::
 
-        --- get_group_list_data demo---
+        --- paging demo---
         [1, 2, 3, 4, 5]
         [60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]
         [90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
@@ -993,8 +954,14 @@ def get_sub_dict(data_dict, key_list, default_value='default_value'):
     return sub_dict
 
 
-# v1.1.1 edit by Hu Jun, #114
+# 2019.01.05 v1.1.6 edit by Hu Jun, #152
 def transform_hump_to_underline(param_dict):
+    show_deprecation_warn('transform_hump_to_underline', 'camelcase_to_underline')
+    return camelcase_to_underline(param_dict)
+
+
+# v1.1.1 edit by Hu Jun, #114
+def camelcase_to_underline(param_dict):
     """
     将驼峰命名的参数字典键转换为下划线参数
 
@@ -1070,6 +1037,7 @@ def find_same_between_dicts(dict1, dict2):
 
 
 # v1.1.3 edit by Hu Jun, #94
+# v1.0.17 edit by Hu Jun, #212
 def yaml_conf_as_dict(file_path, encoding=None):
     """
     读入 yaml 配置文件，返回根据配置文件内容生成的字典类型变量
@@ -1108,9 +1076,9 @@ def yaml_conf_as_dict(file_path, encoding=None):
         ---
 
     """
-    if not os.path.isfile(file_path):
+    if not pathlib.Path(file_path).is_file():
         return False, {}, 'File not exist'
-    
+
     try:
         if sys.version > '3':
             with open(file_path, 'r', encoding=encoding) as f:
@@ -1124,60 +1092,19 @@ def yaml_conf_as_dict(file_path, encoding=None):
         return False, {}, 'Unknow error'
 
 
-# v1.1.3 edit by Hu Jun, #100
+# 2019.01.06 edit by Hu Jun, #152
 class GetSha256(object):
-    """
-    计算字符串和密钥的 sha256 算法哈希值
-
-    举例如下::
-
-        print('--- GetSha256 demo ---')
-        # 定义哈希字符串
-        message = 'Hello HMAC'
-        # 定义密钥
-        secret = '12345678'
-        print('hmac_sha256:', GetSha256.hmac_sha256(secret, message))
-        print('hashlib_sha256:', GetSha256.hashlib_sha256(message))
-        print('---')
-
-    执行结果::
-
-        --- GetSha256 demo ---
-        hmac_sha256: 5eb8bdabdaa43f61fb220473028e49d40728444b4322f3093decd9a356afd18f
-        hashlib_sha256: 4a1601381dfb85d6e713853a414f6b43daa76a82956911108512202f5a1c0ce4
-        ---
-
-    """
     @staticmethod
     def hmac_sha256(secret, message):
-        """
-        获取一个字符串的在密钥 secret 加密下的 sha256 哈希值
-
-        :param:
-            * secret: (string) 哈希算法的密钥
-            * message: (string) 需要进行哈希的字符串
-        :return:
-            * hashed_str: sha256 算法哈希值
-        """
-        hashed_str = hmac.new(secret.encode('utf-8'),
-                              message.encode('utf-8'),
-                              digestmod=hashlib.sha256).hexdigest()
-        return hashed_str
+        from fishbase.fish_crypt import FishSha256
+        show_deprecation_warn('GetSha256.hmac_sha256', 'FishSha256.hmac_sha256')
+        return FishSha256.hmac_sha256(secret, message)
 
     @staticmethod
     def hashlib_sha256(message):
-        """
-        获取一个字符串的 sha256 哈希值
-
-        :param:
-            * message: (string) 需要进行哈希的字符串
-        :return:
-            * hashed_str: sha256 算法哈希值
-        """
-        hashlib_sha256 = hashlib.sha256()
-        hashlib_sha256.update(message.encode('utf-8'))
-        hashed_str = hashlib_sha256.hexdigest()
-        return hashed_str
+        from fishbase.fish_crypt import FishSha256
+        show_deprecation_warn('GetSha256.hashlib_sha256', 'FishSha256.hashlib_sha256')
+        return FishSha256.hashlib_sha256(message)
 
 
 # v1.0.14 original by Jia Chunying, edit by Hu Jun, #27
